@@ -1,5 +1,5 @@
-#include "pthread.h"
-#include "search.h"
+#include <pthread.h>
+#include <search.h>
 
 /* Function to exit and print error msg */
 void exit_msg(char *msg);
