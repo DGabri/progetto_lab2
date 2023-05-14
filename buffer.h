@@ -16,16 +16,16 @@ typedef struct {
 } Buffer;
 
 // initialize the buffer
-int init_buffer(Buffer *buffer, int buffer_len, int producers_count);
+void init_buffer(Buffer *buffer, int buffer_len);
 
 // free buffer memory
 void destroy_buffer(Buffer *buffer);
 
 // insert element into buffer
-void insert_element(Buffer *buffer, int elem);
+void insert_element(Buffer *buffer, char *elem);
 
 // remove element from buffer
-int remove_element(Buffer *buffer);
+char *remove_element(Buffer *buffer);
 
 // capo scrittore function
 void *capo_scrittore(void *arg);
