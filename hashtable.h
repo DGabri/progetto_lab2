@@ -46,3 +46,6 @@ void aggiungi(char *s);
 
 // return hashtable occurrences of the word s
 int conta(char *s);
+
+// return the counter of unique words in the hashtable
+int get_unique_words_count();

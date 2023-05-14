@@ -146,3 +146,11 @@ int conta(char *s) {
 
   return word_count;
 }
+
+int get_unique_words_count() {
+  hashtable_reader_lock(&hashtable_global_sync);
+  int count = hashtable_global_sync.unique_words_count;
+  hashtable_reader_unlock(&hashtable_global_sync);
+
+  return count;
+}
