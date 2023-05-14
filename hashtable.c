@@ -103,12 +103,19 @@ void aggiungi(char *s) {
   ENTRY *result = hsearch(*entry, FIND);
 
   // search if word to insert is already in the hashtable
+  // entry was not present
   if (result == NULL) {
+
+    // insert element
     result = hsearch(*entry, ENTER);
 
     if (result == NULL) {
       exit_msg("Hashtable search error");
     }
+
+    // update unique_word_count
+    hashtable_global_sync.unique_words_count++;
+
   } else {
 
     assert(strcmp(entry->key, result->key) == 0);

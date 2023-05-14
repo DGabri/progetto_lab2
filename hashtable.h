@@ -11,6 +11,7 @@ typedef struct htable {
   // numbers of readers currently reading
   int readers;
   int writer;
+  int unique_words_count;
   // sync vars
   pthread_cond_t sync_var;
   pthread_mutex_t mutex;
