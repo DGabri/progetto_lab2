@@ -1,0 +1,50 @@
+import socket
+import struct
+import sys
+
+# connection constants
+HOST = '127.0.0.1'
+PORT = 54901
+
+# check that the file ends with .txt
+def check_text_file(fname):
+
+    return fname.endswith(".txt")
+
+def send_sequence(server_socket, identifier, file_path):
+    # Send client identifier
+    server_socket.send(identifier.encode())
+
+    # Send lines from the file
+    with open(file_path, 'r') as file:
+    
+        for line in file:
+            # encode in bytes the line 
+            line = line.strip()
+            line_bytes = line.encode()
+        
+            # pack line length
+            line_len_bytes = struct.pack('!I', len(line_bytes))
+            # send line length as bytes
+            server_socket.send(line_len_bytes)
+            # send the line
+            server_socket.send(line_bytes)
+
+    # Close the socket
+    server_socket.close()
+
+if __name__ == '__main__':
+
+    # wrong number of parameters
+    if (len(sys.argv) != 2):
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    # check if file parameter is a text file
+    if (check_text_file(input_file)):
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Connect to server
+        client_socket.connect((HOST, PORT))
+
+        # Send the sequence from client A
+        send_sequence(client_socket, 'A', input_file)
