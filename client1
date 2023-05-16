@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from concurrent.futures import ThreadPoolExecutor
 import socket
 import struct
 import sys
@@ -14,8 +13,9 @@ def check_text_file(fname):
     return fname.endswith(".txt")
 
 def send_line(server_socket, identifier, file_path):
+
     # send client type letter to server
-    server_socket.send(identifier.encode())
+    server_socket.sendall(identifier.encode())
 
     # read file line by line
     with open(file_path, 'r') as file:
@@ -28,9 +28,9 @@ def send_line(server_socket, identifier, file_path):
             # pack line length
             line_len_bytes = struct.pack('!I', len(line_bytes))
             # send line length as bytes
-            server_socket.send(line_len_bytes)
+            server_socket.sendall(line_len_bytes)
             # send the line
-            server_socket.send(line_bytes)
+            server_socket.sendall(line_bytes)
 
     # close socket when file is completely read and lines sent to the server
     server_socket.close()
@@ -43,11 +43,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     input_file = sys.argv[1]
-    # check if file parameter is a text file
-    if (check_text_file(input_file)):
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # establish connection to server
-        client_socket.connect((HOST, PORT))
 
-        # send file lines from client A to server
-        send_line(client_socket, 'A', input_file)
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # establish connection to server
+    client_socket.connect((HOST, PORT))
+    # send file lines from client A to server
+    send_line(client_socket, 'A', input_file)
