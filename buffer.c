@@ -57,10 +57,11 @@ void insert_element(Buffer *buffer, char *elem) {
     buffer->data[insert_index] = strdup(elem);
     buffer->tail = (insert_index + 1) % (PC_buffer_len);
     buffer->inserted++;
-
+    // printf(".c => inserted %s\n", elem);
     xpthread_cond_signal(&buffer->not_empty, line, file);
 
   } else {
+    printf("INSERTED NULL\n");
     buffer->capo_has_finished = 1;
     xpthread_cond_broadcast(&buffer->not_empty, line, file);
   }
@@ -80,7 +81,6 @@ char *remove_element(Buffer *buffer) {
   }
 
   char *elem;
-
   // there is at least an element, remove it
   if (buffer->inserted > 0) {
 
@@ -89,8 +89,8 @@ char *remove_element(Buffer *buffer) {
     elem = buffer->data[head];
     buffer->head = (head + 1) % (PC_buffer_len);
     buffer->inserted--;
-
-    // signal that an element was removed
+    // printf(".c => read %s\n", elem);
+    //  signal that an element was removed
     xpthread_cond_signal(&buffer->not_full, line, file);
   } else {
     elem = NULL;
@@ -104,8 +104,8 @@ char *remove_element(Buffer *buffer) {
 /*=================== CAPO SCRITTORE ===================*/
 // capo scrittore function
 void *capo_scrittore(void *arg) {
-
-  // shared buffer between capo scrittore and scrittori
+  // puts(".c => started caposcrittore");
+  //  shared buffer between capo scrittore and scrittori
   Buffer *shared_buff = (Buffer *)arg;
   // open caposc pipe
   int pipe_fd = open("caposc", O_RDONLY);
@@ -114,8 +114,9 @@ void *capo_scrittore(void *arg) {
     printf("error opening caposc\n");
     exit(1);
   }
-
-  // read from pipe and insert on shared buffer
+  puts(".c => CAPO LETTORE OPENED PIPE");
+  // puts(".c => opened caposc");
+  //  read from pipe and insert on shared buffer
   while (1) {
     int str_len;
 
@@ -145,7 +146,9 @@ void *capo_scrittore(void *arg) {
       exit(1);
     } else if (pipe_ret_val == 0) {
       // pipe is empty => insert NULL in buffer
+      printf(".c => CAPO SCRITTORE RECEIVED NULL\n");
       insert_element(shared_buff, NULL);
+      printf(".c => CAPO SCRITTORE INSERTED NULL\n");
       break;
     }
 
@@ -162,7 +165,7 @@ void *capo_scrittore(void *arg) {
     part = strtok_r(rcvd_string, ".,:; \n\r\t", &rimanente);
 
     while (part != NULL) {
-      printf("Piece: %s\n", part);
+      // printf("Piece: %s\n", part);
       char *part_copy = strdup(part);
 
       if (part_copy == NULL) {
@@ -184,8 +187,8 @@ void *capo_scrittore(void *arg) {
 void *thread_scrittore(void *arg) {
   // shared buffer between capo scrittore and scrittori
   Buffer *shared_buff = (Buffer *)arg;
-
-  // read from buffer until NULL is read (termination string)
+  // puts(".c => thread scrittore launched");
+  //   read from buffer until NULL is read (termination string)
   while (1) {
     char *read_str = remove_element(shared_buff);
 
@@ -205,18 +208,18 @@ void *thread_scrittore(void *arg) {
 /*=================== CAPO LETTORE ===================*/
 // capo lettore function
 void *capo_lettore(void *arg) {
-
-  // shared buffer between capo lettore and lettori
+  //  shared buffer between capo lettore and lettori
   Buffer *shared_buff = (Buffer *)arg;
-  // open caposc pipe
+  // puts(".c => started capo lettore");
+  //  open caposc pipe
   int pipe_fd = open("capolet", O_RDONLY);
-
+  puts(".c => CAPO LETTORE OPENED PIPE");
   if (pipe_fd < 0) {
     printf("error opening capolet\n");
     exit(1);
   }
-
-  // read from pipe and insert on shared buffer
+  // puts(".c => opened capolet");
+  //  read from pipe and insert on shared buffer
   while (1) {
     int str_len;
 
@@ -229,7 +232,7 @@ void *capo_lettore(void *arg) {
 
     // convert from  network order to machine order the received bytes
     str_len = ntohl(str_len);
-    printf(".c => STR LEN: %d\n", str_len);
+    // printf(".c => STR LEN: %d\n", str_len);
 
     // allocate 1 more char to put '\0' at the end
     char *rcvd_string = malloc(str_len + 1);
@@ -246,7 +249,9 @@ void *capo_lettore(void *arg) {
       exit(1);
     } else if (pipe_ret_val == 0) {
       // pipe is empty => insert NULL in buffer
+      printf(".c => CAPO LETTORE RECEIVED NULL\n");
       insert_element(shared_buff, NULL);
+      printf(".c => CAPO LETTORE INSERTED NULL\n");
       break;
     }
 
@@ -263,7 +268,7 @@ void *capo_lettore(void *arg) {
     part = strtok_r(rcvd_string, ".,:; \n\r\t", &rimanente);
 
     while (part != NULL) {
-      printf("Piece: %s\n", part);
+      // printf("Piece: %s\n", part);
       char *part_copy = strdup(part);
 
       if (part_copy == NULL) {
@@ -285,8 +290,8 @@ void *capo_lettore(void *arg) {
 void *thread_lettore(void *arg) {
   // shared buffer between capo lettore and lettori
   Buffer *shared_buff = (Buffer *)arg;
-
-  // read from buffer until NULL is read (termination string)
+  // puts(".c => thread lettore avviato");
+  //  read from buffer until NULL is read (termination string)
   while (1) {
     char *read_str = remove_element(shared_buff);
 
@@ -296,7 +301,7 @@ void *thread_lettore(void *arg) {
     }
 
     // logging -> string count\n
-    FILE *log_file = fopen("lettori.log", "w");
+    FILE *log_file = fopen("lettori.log", "a");
 
     if (log_file == NULL) {
       printf("Error opening file");
