@@ -110,9 +110,9 @@ if __name__ == '__main__':
     # call archivio.c using subprocess
     
     if (args.v == True):
-        c_launcher = ['valgrind', '--leak-check=full', '--show-leak-kinds=all', '--log-file=valgrind-%p.log', './archivio', '-r', str(args.r), '-w', str(args.w)]
+        c_launcher = ['valgrind', '--leak-check=full', '--show-leak-kinds=all', '--log-file=valgrind-%p.log', './archivio', str(args.r), str(args.w)]
     else:
-        c_launcher = ['./archivio', '-r', str(args.r), '-w', str(args.w)]
+        c_launcher = ['./archivio', str(args.r), str(args.w)]
     
 
     archivio_launcher = subprocess.Popen(c_launcher)
