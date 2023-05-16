@@ -16,7 +16,7 @@ typedef struct {
 } Buffer;
 
 // initialize the buffer
-void init_buffer(Buffer *buffer, int buffer_len);
+void init_buffer(Buffer *buffer);
 
 // free buffer memory
 void destroy_buffer(Buffer *buffer);
