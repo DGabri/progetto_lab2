@@ -101,7 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', type = int, required = True, help = 'Max threads num')
     parser.add_argument('-r', type = int, default = 3, help = 'Num threads reader (archivio.c)')
     parser.add_argument('-w', type = int, default = 3, help = 'Num threads write (archivio.c)')
-    parser.add_argument('-v', type = int, default = 0, action = range(0, 1), help ='starts valgrind if 1 (archivio.c)')
+    parser.add_argument('-v', action='store_true', help ='starts valgrind if -v is present (archivio.c)')
     args = parser.parse_args()
 
     # create pipes
@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
     # call archivio.c using subprocess
     
-    if (args.v):
+    if (args.v == True):
         c_launcher = ['valgrind', '--leak-check=full', '--show-leak-kinds=all', '--log-file=valgrind-%p.log', './archivio', '-r', str(args.r), '-w', str(args.w)]
     else:
         c_launcher = ['./archivio', '-r', str(args.r), '-w', str(args.w)]
