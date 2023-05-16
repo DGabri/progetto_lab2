@@ -5,6 +5,7 @@ void exit_msg(char *msg) {
   exit(1);
 }
 
+/*=================== HASHTABLE SYNC ===================*/
 Htable_sync hashtable_global_sync;
 
 // init syncronization variables
@@ -75,6 +76,7 @@ void hashtable_writer_unlock(Htable_sync *hashtable_sync) {
   }
 }
 
+/*=================== HASHTABLE FUNCTIONS ===================*/
 ENTRY *create_hashtable_entry(char *string, int n) {
   ENTRY *new_entry = malloc(sizeof(ENTRY));
 
@@ -84,8 +86,9 @@ ENTRY *create_hashtable_entry(char *string, int n) {
 
   new_entry->key = strdup(string);
   new_entry->data = (int *)malloc(sizeof(int));
-  if (new_entry->key == NULL || new_entry->data == NULL)
-    termina("errore malloc entry 2");
+  if (new_entry->key == NULL || new_entry->data == NULL) {
+    exit_msg("errore malloc entry 2");
+  }
   *((int *)new_entry->data) = n;
   return new_entry;
 }
@@ -98,8 +101,9 @@ void free_entry_memory(ENTRY *entry) {
 
 void aggiungi(char *s) {
 
-  hashtable_writer_lock(&hashtable_global_sync);
   ENTRY *entry = create_hashtable_entry(s, 1);
+  // get exclusive access to hashtable
+  hashtable_writer_lock(&hashtable_global_sync);
   ENTRY *result = hsearch(*entry, FIND);
 
   // search if word to insert is already in the hashtable
@@ -129,26 +133,30 @@ void aggiungi(char *s) {
 int conta(char *s) {
 
   int word_count = 0;
-  hashtable_reader_lock(&hashtable_global_sync);
-
-  // search word in hashtable
+  // create new entry
   ENTRY *entry = create_hashtable_entry(s, 1);
+
+  // get exclusive access to hashtable
+  hashtable_reader_lock(&hashtable_global_sync);
+  // search word in hashtable
   ENTRY *result = hsearch(*entry, FIND);
 
   // s is present inside the hashtable
   if (result != NULL) {
     word_count = *((int *)result->data);
+    free_entry_memory(entry);
   } else {
     word_count = 0;
   }
-  free_entry_memory(entry);
   hashtable_reader_unlock(&hashtable_global_sync);
 
   return word_count;
 }
 
 int get_unique_words_count() {
+  // get exclusive access to hashtable
   hashtable_reader_lock(&hashtable_global_sync);
+  // get the number of unique words
   int count = hashtable_global_sync.unique_words_count;
   hashtable_reader_unlock(&hashtable_global_sync);
 
