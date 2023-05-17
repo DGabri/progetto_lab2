@@ -19,10 +19,11 @@ def send_line(server_socket, identifier, file_path):
 
     # read file line by line
     with open(file_path, 'r') as file:
-    
+
         for line in file:
             # encode in bytes the line 
             line = line.strip()
+
             line_bytes = line.encode()
         
             # pack line length
@@ -31,8 +32,11 @@ def send_line(server_socket, identifier, file_path):
             server_socket.sendall(line_len_bytes)
             # send the line
             server_socket.sendall(line_bytes)
+        
+    server_socket.send(b'')
 
     # close socket when file is completely read and lines sent to the server
+    server_socket.shutdown(socket.SHUT_RDWR)
     server_socket.close()
 
 if __name__ == '__main__':
@@ -50,6 +54,8 @@ if __name__ == '__main__':
 
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             # Connect to server
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             client_socket.connect((HOST, PORT))
             # send file lines from client B to server using a thread for each file
             executor.submit(send_line, client_socket, 'B', filename)    
+            

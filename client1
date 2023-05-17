@@ -21,6 +21,7 @@ def send_line(server_socket, identifier, file_path):
     with open(file_path, 'r') as file:
     
         for line in file:
+            
             # encode in bytes the line 
             line = line.strip()
             line_bytes = line.encode()

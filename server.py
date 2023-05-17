@@ -47,82 +47,81 @@ def log_bytes_written(client_connection_type, caposc_bytes_written, capolet_byte
     else:
         logging.info(f"Connessione: {client_connection_type}, bytes scritti in caposc: {caposc_bytes_written}")
 
-def client_connection(conn):
+def client_connection(conn, capolet_fd, caposc_fd):
     # logging stats
     bytes_written_caposc = 0
     bytes_written_capolet = 0
     client_type = ""
 
-    # get client type letter
-    connection_code_type = conn.recv(1)
+    with conn:
+        # get client type letter
+        connection_code_type = conn.recv(1)
 
-    if (not connection_code_type):
-        return
-    
-    # decode client type
-    client_type = connection_code_type.decode()
-
-    # open pipes
-    if (client_type == "A"):
-        capolet_fd = os.open("capolet", os.O_RDWR)
-        print(".py => opened capolet FIFO")
-    else:
-        caposc_fd = os.open("caposc", os.O_RDWR)
-        print(".py => opened caposc FIFO")
-
-
-    while True:
-
-        # get msg length
-        str_len_bytes = conn.recv(4)
-
-        if (not str_len_bytes):
-            print("Zero seq len")
-            write_zero_sequence_to_pipe(client_type, caposc_fd, capolet_fd)
-            break
-
-        #convert sequence length from bytes to int
-        str_len_number = struct.unpack('!I', str_len_bytes)[0]
+        if (not connection_code_type):
+            return
         
-        # read sequnce of length received before
-        message = conn.recv(str_len_number)
-        
-        if (not message):
-            print("Zero seq msg")
-            write_zero_sequence_to_pipe(client_type, caposc_fd, capolet_fd)
-            break
-        
-        if (client_type == "A"):
-            # write in capolet
-            bytes_written_capolet += (4 + str_len_number)
-            # write 4 bytes to indicate string length
-            #print(".py => Received msg A:", message.decode())
-            os.write(capolet_fd, str_len_bytes)
-            # write the line
-            os.write(capolet_fd, message)
+        # decode client type
+        client_type = connection_code_type.decode()
 
-        elif (client_type == "B"):
-            #write in caposc
-            bytes_written_caposc += (4 + str_len_number)
-            # write 4 bytes to indicate string length
-            #print(".py => Received msg B:", message.decode())   
-            os.write(caposc_fd, str_len_bytes)
-            # write the line
-            os.write(caposc_fd, message)
+        #receive messages
+        while True:
 
-        #print(f"Client code: {client_type}, len: {str_len_number}, msg: {message.decode()}")
-        
+            # get msg length
+            str_len_bytes = conn.recv(4)
 
-    # Connection closed
-    conn.close()
-    print("CLOSED CONNECTION")
+            if (not str_len_bytes):
+                if (client_type == "A"):
+                    # write 0 to pipe
+                    os.write(capolet_fd, b'\x00\x00\x00\x00') 
+                else:
+                    os.write(caposc_fd, b'\x00\x00\x00\x00') 
+                conn.close()
+                break
+
+            #convert sequence length from bytes to int
+            str_len_number = struct.unpack('!I', str_len_bytes)[0]
+            
+            # read sequence of length received before
+            message = conn.recv(str_len_number)
+            
+            if (not message):
+                print("[server.py] Closing...")
+                conn.close()
+                break
+            
+            if (client_type == "A"):
+                # write in capolet
+                # write 4 bytes to indicate string length
+                written_len = os.write(capolet_fd, str_len_bytes)
+                # write the line
+                written_msg_len = os.write(capolet_fd, message)
+                #print("-----")
+                #print(f"LEN A: {written_len}")
+                #print(f"MSG A: {written_msg_len}")
+
+                print("[server.py] SENT A: ", message)
+                bytes_written_capolet += (4 + str_len_number)
+
+            elif (client_type == "B"):
+                #write in caposc
+                # write 4 bytes to indicate string length
+                written_len = os.write(caposc_fd, str_len_bytes)
+                # write the line
+                written_msg_len = os.write(caposc_fd, message)
+                #print("-----")
+                #print(f"LEN B: {written_len}")
+                #print(f"MSG B: {written_msg_len}")
+                print("[server.py] SENT B: ", message)
+                if(written_msg_len != str_len_number):
+                    print("[server.py] Send Error B: ", message, written_msg_len, str_len_number)
+                bytes_written_caposc += (4 + str_len_number)
+
     log_bytes_written(client_type, bytes_written_caposc, bytes_written_capolet)
 
 if __name__ == '__main__':
-    print(".py => starting server")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', type = int, required = True, help = 'Max threads num')
+    parser.add_argument('thread_num', help='Max threads num', nargs='?')
     parser.add_argument('-r', type = int, default = 3, help = 'Num threads reader (archivio.c)')
     parser.add_argument('-w', type = int, default = 3, help = 'Num threads write (archivio.c)')
     parser.add_argument('-v', action='store_true', help ='starts valgrind if -v is present (archivio.c)')
@@ -138,33 +137,41 @@ if __name__ == '__main__':
         c_launcher = ['valgrind', '--leak-check=full', '--show-leak-kinds=all', '--log-file=valgrind-%p.log', './archivio', str(args.r), str(args.w)]
     else:
         c_launcher = ['./archivio', str(args.r), str(args.w)]
-    
 
     archivio_launcher = subprocess.Popen(c_launcher)
-    print(".py => launched archivio", archivio_launcher.pid)
-    print(".py => listening")
-    print(".py => args thread", args.t)
 
+
+    capolet = os.open("capolet", os.O_RDWR)
+    caposc = os.open("caposc", os.O_RDWR)
+    print("Blocking Mode:", os.get_blocking(capolet)) 
+
+    if (args.thread_num is None):
+        parser.error("The input value is required.")
+
+    
     # server initialization
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         try:  
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)            
             server.bind((HOST, PORT))
-            server.listen(args.t)
+            server.listen()
 
-            with ThreadPoolExecutor(max_workers=args.t) as executor:
+            with ThreadPoolExecutor(max_workers=int(args.thread_num)) as executor:
                 while True:
-                    conn, _ = server.accept()
-                    executor.submit(client_connection, conn)
+                    conn, addr = server.accept()
+                    executor.submit(client_connection, conn, capolet, caposc)
 
         except KeyboardInterrupt:
-            # delete pipes and kill archivio.c
-            print("deleting pipes")
-            delete_pipes()       
-            print("pipes deleted, sending termination signal")     
-            archivio_launcher.send_signal(signal.SIGTERM)
-            print("sent termination signal")
-            print("Server shut down")
+            pass
 
         server.shutdown(socket.SHUT_RDWR)
-        server.close()
+
+    # delete pipes and kill archivio.c
+    print("deleting pipes")
+    delete_pipes()       
+    print("pipes deleted, sending termination signal")     
+    archivio_launcher.send_signal(signal.SIGTERM)
+    print("sent termination signal")
+    print("Server shut down")
+
+    
