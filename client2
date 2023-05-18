@@ -24,6 +24,10 @@ def send_line(server_socket, identifier, file_path):
             # encode in bytes the line 
             line = line.strip()
 
+            # pass empty lines
+            if not line:
+                continue
+            
             line_bytes = line.encode()
         
             # pack line length
