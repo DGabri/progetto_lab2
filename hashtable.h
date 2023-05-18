@@ -1,5 +1,4 @@
-#include <pthread.h>
-#include <search.h>
+#pragma once
 
 /* Function to exit and print error msg */
 void exit_msg(char *msg);
