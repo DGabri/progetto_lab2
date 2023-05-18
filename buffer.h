@@ -1,5 +1,3 @@
-#include <stdlib.h>
-
 // buffer lenght definition
 #define PC_buffer_len 10
 
