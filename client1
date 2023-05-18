@@ -7,34 +7,21 @@ import sys
 HOST = '127.0.0.1'
 PORT = 54901
 
-# check that the file ends with .txt
-def check_text_file(fname):
+def send_line(line):
 
-    return fname.endswith(".txt")
-
-def send_line(server_socket, identifier, file_path):
-
-    # send client type letter to server
-    server_socket.sendall(identifier.encode())
-
-    # read file line by line
-    with open(file_path, 'r') as file:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+        # connect to server
+        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        client_socket.connect((HOST, PORT))
     
-        for line in file:
-            
-            # encode in bytes the line 
-            line = line.strip()
-            line_bytes = line.encode()
-        
-            # pack line length
-            line_len_bytes = struct.pack('!I', len(line_bytes))
-            # send line length as bytes
-            server_socket.sendall(line_len_bytes)
-            # send the line
-            server_socket.sendall(line_bytes)
-
-    # close socket when file is completely read and lines sent to the server
-    server_socket.close()
+        # check that the line is not an empty line
+        if line.strip():
+            data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
+            client_socket.sendall(data)
+    
+        # close socket
+        client_socket.shutdown(socket.SHUT_RDWR)
+        client_socket.close()
 
 
 if __name__ == '__main__':
@@ -43,10 +30,22 @@ if __name__ == '__main__':
     if (len(sys.argv) != 2):
         sys.exit(1)
 
+    # get input file name
     input_file = sys.argv[1]
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # establish connection to server
-    client_socket.connect((HOST, PORT))
-    # send file lines from client A to server
-    send_line(client_socket, 'A', input_file)
+    # open and read each file line and send it
+    with open(sys.argv[1], 'r') as file:
+
+        for line in file:
+
+            # send the read line
+            send_line(line)
+
+        # send termination signal
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            # connect to server
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            client_socket.connect((HOST, PORT))
+            
+            # send 0 to server
+            client_socket.sendall(b'A' + b'\x00\x00\x00\x00')
