@@ -1,4 +1,5 @@
 #include "include.h"
+#include <pthread.h>
 
 void exit_msg(char *msg) {
   printf("%s\n", msg);
@@ -6,27 +7,29 @@ void exit_msg(char *msg) {
 }
 
 /*=================== HASHTABLE SYNC ===================*/
-Htable_sync hashtable_global_sync;
+extern Htable_sync hashtable_global_sync;
 
 // init syncronization variables
 void init_hashtable_sync_variables(Htable_sync *hashtable_sync) {
 
   hashtable_sync->readers = 0;
-  hashtable_sync->writer = 0;
+  hashtable_sync->writers = 0;
+  hashtable_sync->writers_queue = 0;
 
   // initialize condition variable and mutex
-  xpthread_cond_init(&hashtable_sync->sync_var, NULL, line, file);
+  xpthread_cond_init(&hashtable_sync->sync_var_readers, NULL, line, file);
+  xpthread_cond_init(&hashtable_sync->sync_var_writers, NULL, line, file);
   xpthread_mutex_init(&hashtable_sync->mutex, NULL, line, file);
 }
 
 // reader gets access to hashtable
 void hashtable_reader_lock(Htable_sync *hashtable_sync) {
-
   pthread_mutex_lock(&hashtable_sync->mutex);
 
   // wait that the current writer finishes writing
-  while (hashtable_sync->writer > 0) {
-    pthread_cond_wait(&hashtable_sync->sync_var, &hashtable_sync->mutex);
+  while (hashtable_sync->writers_queue > 0 || hashtable_sync->writers > 0) {
+    pthread_cond_wait(&hashtable_sync->sync_var_readers,
+                      &hashtable_sync->mutex);
   }
 
   hashtable_sync->readers++;
@@ -35,45 +38,43 @@ void hashtable_reader_lock(Htable_sync *hashtable_sync) {
 
 // reader gives other access to hashtable
 void hashtable_reader_unlock(Htable_sync *hashtable_sync) {
+  pthread_mutex_lock(&hashtable_sync->mutex);
+  // update readers count
+  hashtable_sync->readers--;
 
-  if ((hashtable_sync->readers > 0) && (hashtable_sync->writer != 0)) {
-    pthread_mutex_lock(&hashtable_sync->mutex);
-
-    // update readers count
-    hashtable_sync->readers--;
-    if (hashtable_sync->readers == 0) {
-      // signal waiting writer
-      pthread_cond_signal(&hashtable_sync->sync_var);
-    }
-
-    pthread_mutex_unlock(&hashtable_sync->mutex);
+  if ((hashtable_sync->readers == 0) && (hashtable_sync->writers_queue > 0)) {
+    pthread_cond_signal(&hashtable_sync->sync_var_writers);
   }
+  pthread_mutex_unlock(&hashtable_sync->mutex);
 }
 
 // writer gets hashtable access
 void hashtable_writer_lock(Htable_sync *hashtable_sync) {
   pthread_mutex_lock(&hashtable_sync->mutex);
+  hashtable_sync->writers_queue += 1;
 
-  while (hashtable_sync->writer || hashtable_sync->readers > 0) {
+  while (hashtable_sync->writers > 0 || hashtable_sync->readers > 0) {
     // attende fine scrittura o lettura
-    pthread_cond_wait(&hashtable_sync->sync_var, &hashtable_sync->mutex);
+    pthread_cond_wait(&hashtable_sync->sync_var_writers,
+                      &hashtable_sync->mutex);
   }
-
-  hashtable_sync->writer = 1;
+  hashtable_sync->writers_queue--;
+  hashtable_sync->writers++;
   pthread_mutex_unlock(&hashtable_sync->mutex);
 }
 
 // writer gives other access to hashtable
 void hashtable_writer_unlock(Htable_sync *hashtable_sync) {
+  pthread_mutex_lock(&hashtable_sync->mutex);
+  hashtable_sync->writers--;
   // check that a writer has access to hashtable
-  if (hashtable_sync->writer) {
-    pthread_mutex_lock(&hashtable_sync->mutex);
-    hashtable_sync->writer = 0;
-
+  if (hashtable_sync->writers_queue > 0) {
+    pthread_cond_signal(&hashtable_sync->sync_var_writers);
     // signal to everyone waiting
-    pthread_cond_broadcast(&hashtable_sync->sync_var);
-    pthread_mutex_unlock(&hashtable_sync->mutex);
+  } else {
+    pthread_cond_broadcast(&hashtable_sync->sync_var_readers);
   }
+  pthread_mutex_unlock(&hashtable_sync->mutex);
 }
 
 /*=================== HASHTABLE FUNCTIONS ===================*/
@@ -99,34 +100,35 @@ void free_entry_memory(ENTRY *entry) {
   free(entry);
 }
 
+/* ****************** */
+
 void aggiungi(char *s) {
-
   ENTRY *entry = create_hashtable_entry(s, 1);
-  // get exclusive access to hashtable
+
+  // get exclusive access to the hashtable
   hashtable_writer_lock(&hashtable_global_sync);
+
   ENTRY *result = hsearch(*entry, FIND);
-
-  // search if word to insert is already in the hashtable
-  // entry was not present
   if (result == NULL) {
-
-    // insert element
+    // entry was not found, insert it
     result = hsearch(*entry, ENTER);
 
     if (result == NULL) {
-      exit_msg("Hashtable search error");
+      hashtable_writer_unlock(&hashtable_global_sync);
+      exit_msg("Hashtable insert error");
     }
-
-    // update unique_word_count
+    // printf("[HASHTABLE INSERTED] => %s:%d\n", result->key,
+    //        *((int *)result->data));
     hashtable_global_sync.unique_words_count++;
-
   } else {
-
-    assert(strcmp(entry->key, result->key) == 0);
+    // entry already exists, increment occurrence count
     int *counter = (int *)result->data;
     *counter += 1;
+    // printf("[HASHTABLE UPDATED] => %s:%d\n", result->key,
+    //        *((int *)result->data));
     free_entry_memory(entry);
   }
+
   hashtable_writer_unlock(&hashtable_global_sync);
 }
 
@@ -134,18 +136,19 @@ int conta(char *s) {
 
   int word_count = 0;
   // create new entry
-  ENTRY *entry = create_hashtable_entry(s, 1);
+  ENTRY *entry = create_hashtable_entry(s, 0);
 
   // get exclusive access to hashtable
   hashtable_reader_lock(&hashtable_global_sync);
   // search word in hashtable
   ENTRY *result = hsearch(*entry, FIND);
 
-  // s is present inside the hashtable
   if (result != NULL) {
     word_count = *((int *)result->data);
+    // printf("[HASHTABLE FOUND] => %s:%d\n", result->key, word_count);
     free_entry_memory(entry);
   } else {
+    // printf("[HASHTABLE MISSING] => %s not found\n", s);
     word_count = 0;
   }
   hashtable_reader_unlock(&hashtable_global_sync);
