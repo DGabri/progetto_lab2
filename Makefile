@@ -22,9 +22,10 @@ LDLIBS=-lm -lrt -pthread
 
 all: run_server
 
-USE_VALGRIND=#-v
+USE_VALGRIND=-v
 
 run_server: archivio
+	/bin/rm -f valgrind-*
 	./server.py 5 -r 2 -w 4 $(USE_VALGRIND) & 
 	sleep 2
 	./client2 file1 file2

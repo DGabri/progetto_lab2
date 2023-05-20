@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import socket
 import sys
+import time
 
 HOST = '127.0.0.1'
 PORT = 54901
@@ -52,3 +53,6 @@ if __name__ == '__main__':
             executor.submit(send_line, filename)    
 
     send_termination()
+
+    # Required when run with valgrind
+    time.sleep(1)
