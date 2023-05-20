@@ -2,50 +2,78 @@
 import socket
 import struct
 import sys
+import time
 
 # connection constants
 HOST = '127.0.0.1'
 PORT = 54901
 
-def send_line(line):
-
+def send_raw(line):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         # connect to server
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         client_socket.connect((HOST, PORT))
+        print("******* CONNECTED *******")
     
         # check that the line is not an empty line
-        if line.strip():
-            data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
-            client_socket.sendall(data)
-    
+        client_socket.sendall(line)
+        print("Sent: ", line)
         # close socket
         client_socket.shutdown(socket.SHUT_RDWR)
         client_socket.close()
 
+    print("CLOSED SOCKET")
+
+
+def send_line(line):
+    
+    data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
+    send_raw(data)
+
+
+def send_all(fname):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+        # connect to server
+        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        client_socket.connect((HOST, PORT))
+        #print("******* CONNECTED *******")
+
+        with open(fname, 'r') as file:
+            for line in file:
+                if line.strip():
+                    #print(f"LINE: {line}")
+                    # send the read line
+                    data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
+                    client_socket.sendall(data)
+
+        client_socket.sendall(b'A' + b'\x00\x00\x00\x00')
+        #print("SENT TERMINATION SEQ")
+        # check that the line is not an empty line
+        #client_socket.sendall(line)
+        #print("Sent: ", line)
+        # close socket
+        client_socket.shutdown(socket.SHUT_RDWR)
+        client_socket.close()
+
+    print("CLOSED SOCKET")
+
+################
 
 if __name__ == '__main__':
-
     # wrong number of parameters
     if (len(sys.argv) != 2):
         sys.exit(1)
 
     # get input file name
     input_file = sys.argv[1]
-
-    # open and read each file line and send it
+    #send_all(input_file)
     with open(sys.argv[1], 'r') as file:
 
         for line in file:
+            if line.strip():
+                print(f"LINE: {line}")
+                # send the read line
+                send_line(line)
 
-            # send the read line
-            send_line(line)
-
-        # send termination signal
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            # connect to server
-            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            client_socket.connect((HOST, PORT))
-            
-            # send 0 to server
-            client_socket.sendall(b'A' + b'\x00\x00\x00\x00')
+    # Required when run with valgrind
+    time.sleep(1)

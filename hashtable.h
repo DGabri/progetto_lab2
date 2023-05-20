@@ -9,12 +9,13 @@ typedef struct htable {
 
   // numbers of readers currently reading
   int readers;
+  int waiting_readers;
   int writers;
-  int writers_queue;
+  int waiting_writers;
   int unique_words_count;
   // sync vars
-  pthread_cond_t sync_var_readers;
-  pthread_cond_t sync_var_writers;
+  pthread_cond_t can_read;
+  pthread_cond_t can_write;
   pthread_mutex_t mutex;
 } Htable_sync;
 
@@ -50,3 +51,6 @@ int conta(char *s);
 
 // return the counter of unique words in the hashtable
 int get_unique_words_count();
+
+// Free hash memory
+void free_hash_memory();

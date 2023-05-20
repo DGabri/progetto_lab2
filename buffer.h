@@ -8,6 +8,8 @@ typedef struct {
   int tail;
   int capo_has_finished;
   pthread_mutex_t lock;
+  pthread_mutex_t not_full_lock;
+  pthread_mutex_t not_empty_lock;
   pthread_cond_t not_full;
   pthread_cond_t not_empty;
 

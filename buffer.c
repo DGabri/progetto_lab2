@@ -44,7 +44,7 @@ void insert_element(Buffer *buffer, char *elem) {
   if (elem != NULL) {
     int insert_index = buffer->tail;
 
-    buffer->data[insert_index] = strdup(elem);
+    buffer->data[insert_index] = elem;
     buffer->tail = (insert_index + 1) % (PC_buffer_len);
     buffer->inserted++;
     // printf(".c => inserted %s\n", elem);
@@ -60,7 +60,6 @@ void insert_element(Buffer *buffer, char *elem) {
 
 // remove element from buffer
 char *remove_element(Buffer *buffer) {
-
   // acquire lock
   xpthread_mutex_lock(&buffer->lock, line, file);
 

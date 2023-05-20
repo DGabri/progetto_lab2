@@ -4,6 +4,17 @@
 #define Num_elem 1000000
 #define PC_buffer_len 10
 
+// capo lettore and scrittore
+int num_writers;
+int num_readers;
+pthread_t capo_scrittore_thread, capo_lettore_thread;
+pthread_t *scrittori;
+pthread_t *lettori;
+
+// create shared buffers
+Buffer *lettori_buffer;
+Buffer *scrittori_buffer;
+
 // signal thread info
 pthread_cond_t finished_threads_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t finished_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -15,30 +26,67 @@ int finished_threads = 0;
 // hashtable syncronization
 Htable_sync hashtable_global_sync;
 
+// extern FILE *log_file;
+
+
+/* ******************* */
+
+void free_memory() {
+  destroy_buffer(scrittori_buffer);
+  destroy_buffer(lettori_buffer);
+  free(scrittori_buffer);
+  free(lettori_buffer);
+  free(scrittori);
+  free(lettori);
+
+  free_hash_memory();
+}
+
+/* ******************* */
+
 void manage_sigint(int signal_num) {
+  puts("[SIGNAL MANAGER] SIGINT received");
+  
   // get_unique_wors_count() uses reader locks in its implementation
-  fprintf(stderr, "%d\n", get_unique_words_count());
+  fprintf(stderr, "[SIGINT] Unique words in hashtable: %d\n",
+          get_unique_words_count());
 }
 
 void manage_sigterm(int signal_num) {
+  puts("[SIGNAL MANAGER] SIGTERM received");
+  
   // wait threads termination
-  while (finished_threads < NUM_THREADS) {
-    pthread_cond_wait(&finished_threads_cond, &finished_threads_mutex);
+
+  /*=================== THREADS JOIN ===================*/
+  for (int i = 0; i < num_writers; i++) {
+    xpthread_join(scrittori[i], NULL, line, file);
+  }
+  
+  for (int i = 0; i < num_readers; i++) {
+    xpthread_join(lettori[i], NULL, line, file);
   }
 
+  xpthread_join(capo_scrittore_thread, NULL, line, file);
+  xpthread_join(capo_lettore_thread, NULL, line, file);
+
   // print unique words, deallocate hashtable
-  fprintf(stderr, "%d\n", get_unique_words_count());
-  hdestroy();
+  fprintf(stderr, "Unique words in hashtable: %d\n", get_unique_words_count());
+
+  /*=================== FREE MEMORY ===================*/
+  free_memory();
+  
   exit(0);
 }
 
 // Funzione del thread che gestisce i segnali
 void *signal_manager(void *arg) {
   puts("[SIGNAL MANAGER STARTED]");
+  
   sigset_t mask;
-  sigfillset(&mask);
-  sigdelset(&mask, SIGINT);
-  sigdelset(&mask, SIGTERM);
+
+  sigemptyset(&mask);        // remove all signals in the mask
+  sigaddset(&mask, SIGINT);  // add SIGINT to mask
+  sigaddset(&mask, SIGTERM); // add SIGTERM to mask
 
   while (1) {
     int sig_type;
@@ -48,29 +96,41 @@ void *signal_manager(void *arg) {
     if (err_code != 0) {
       exit_msg("Sigwait error");
     }
-    printf("Received signal: %d\n", sig_type);
-    // manage signal
+
+    // manage signal received
     if (sig_type == SIGINT) {
       manage_sigint(sig_type);
     } else if (sig_type == SIGTERM) {
       manage_sigterm(sig_type);
     }
   }
+
+  return NULL;
 }
 
-int main(int argc, char **argv) {
+/* ******************* */
 
+int main(int argc, char **argv) {
   if (argc != 3) {
     exit_msg("Wrong number of args, please use => #writers #readers");
   }
 
-  int num_readers = atoi(argv[1]);
-  int num_writers = atoi(argv[2]);
+  num_readers = atoi(argv[1]);
+  num_writers = atoi(argv[2]);
 
   // update total number of threads so that i can track the number of threads
   // finished in sigterm function
   NUM_THREADS += (num_readers + num_writers);
   printf("[ARCHIVIO.c] Num Threads: %d\n", NUM_THREADS);
+
+  /*=================== SIGNALS INIT ===================*/
+  sigset_t mask; // create signal mask struct
+
+  sigemptyset(&mask);                      // remove all signals from mask
+  sigaddset(&mask, SIGINT);                // block SIGINT
+  sigaddset(&mask, SIGTERM);               // block SIGTERM
+  pthread_sigmask(SIG_BLOCK, &mask, NULL); // block SIGINT and SIGTERM
+
   /*=================== HASHTABLE ===================*/
 
   init_hashtable_sync_variables(&hashtable_global_sync);
@@ -86,8 +146,8 @@ int main(int argc, char **argv) {
   /*=================== SHARED BUFFERS ===================*/
 
   // create shared buffers
-  Buffer *lettori_buffer = malloc(sizeof(Buffer));
-  Buffer *scrittori_buffer = malloc(sizeof(Buffer));
+  lettori_buffer = malloc(sizeof(Buffer));
+  scrittori_buffer = malloc(sizeof(Buffer));
 
   if (lettori_buffer == NULL) {
     puts("Error creating buffer, exiting...");
@@ -111,23 +171,47 @@ int main(int argc, char **argv) {
   init_buffer(scrittori_buffer);
   puts("[ARCHIVIO.c] initialized buffers");
 
+  /*=================== CLEANUP ===================*/
+  unlink("lettori.log");
+  
   /*=================== THREADS LAUNCHER ===================*/
   // threads definition
-  pthread_t signal_manager_thread, capo_scrittore_thread, capo_lettore_thread;
-  pthread_t scrittori[num_writers];
-  pthread_t lettori[num_readers];
+  pthread_t signal_manager_thread;
+
+    // create scrittori lettori thread id
+  scrittori = malloc(sizeof(pthread_t) * num_writers);
+
+  if (scrittori == NULL) {
+    exit_msg("Error allocating scrittori thread id array");
+  }
+
+  lettori = malloc(sizeof(pthread_t) * num_readers);
+  if (lettori == NULL) {
+    exit_msg("Error allocating lettori thread id array");
+  }
 
   // start signal handler thread
-  xpthread_create(&signal_manager_thread, NULL, signal_manager, NULL, line,
-                  file);
+  int ret_code_sig_manager = xpthread_create(&signal_manager_thread, NULL,
+                                             signal_manager, NULL, line, file);
+  if (ret_code_sig_manager != 0) {
+    printf("[ARCHIVIO.c] Error launching signal_manager\n");
+  }
   // puts("[ARCHIVIO.c] created signal manager thread");
   //   start caposc
-  xpthread_create(&capo_scrittore_thread, NULL, capo_scrittore,
-                  (void *)scrittori_buffer, line, file);
+  int ret_code_capo_scrittore =
+      xpthread_create(&capo_scrittore_thread, NULL, capo_scrittore,
+                      (void *)scrittori_buffer, line, file);
+  if (ret_code_capo_scrittore != 0) {
+    printf("[ARCHIVIO.c] Error launching capo_scrittore\n");
+  }
   // puts("[ARCHIVIO.c] started capo scrittore");
   //   start capolet
-  xpthread_create(&capo_lettore_thread, NULL, capo_lettore,
-                  (void *)lettori_buffer, line, file);
+  int ret_code_capo_lettore =
+      xpthread_create(&capo_lettore_thread, NULL, capo_lettore,
+                      (void *)lettori_buffer, line, file);
+  if (ret_code_capo_lettore != 0) {
+    printf("[ARCHIVIO.c] Error launching capo_lettore\n");
+  }
   // puts("[ARCHIVIO.c] started capo lettore");
 
   // start writers threads
@@ -148,45 +232,11 @@ int main(int argc, char **argv) {
       printf("[ARCHIVIO.c] Error launching lettori\n");
     }
   }
-  // printf("[ARCHIVIO.c] started lettori\n");
 
   /*=================== THREADS JOIN ===================*/
-  for (int i = 0; i < num_writers; i++) {
-    int ret_code = xpthread_join(scrittori[i], NULL, line, file);
-    if (ret_code == 0) {
-      finished_threads++;
-    }
-  }
 
-  for (int i = 0; i < num_readers; i++) {
-    int ret_code = xpthread_join(lettori[i], NULL, line, file);
-    if (ret_code == 0) {
-      finished_threads++;
-    }
-  }
-
-  // xpthread_join(signal_manager_thread, NULL, line, file);
-  int ret_code_caposc = xpthread_join(capo_scrittore_thread, NULL, line, file);
-  int ret_code_capolet = xpthread_join(capo_lettore_thread, NULL, line, file);
-
-  if (ret_code_caposc == 0) {
-    finished_threads++;
-  }
-  if (ret_code_capolet == 0) {
-    finished_threads++;
-  }
-
-  // signal sigterm manager thread that all threads have finished
-  xpthread_cond_signal(&finished_threads_cond, line, file);
-  printf("[ARCHIVIO.c] signaled all threads finished\n");
-  printf("[ARCHIVIO.c] threads finished: [%d,%d]\n", finished_threads,
-         NUM_THREADS);
-  /*=================== FREE MEMORY ===================*/
-  destroy_buffer(scrittori_buffer);
-  destroy_buffer(lettori_buffer);
-  free(scrittori_buffer);
-  free(lettori_buffer);
-  hdestroy();
+    // wait signal thread
+  xpthread_join(signal_manager_thread, NULL, line, file);
 
   return 0;
 }

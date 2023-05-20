@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
+import threading
 import argparse
 import logging
 import signal
@@ -10,15 +11,22 @@ import sys
 import os
 
 
+# syncronization for bytes written logging
+written_bytes_caposc_lock = threading.Lock()
+written_bytes_capolet_lock = threading.Lock()
+
+written_bytes_caposc = 0
+written_bytes_capolet = 0
+
 # connection constants
 HOST = '127.0.0.1'
 PORT = 54901
 
 # setup basic logging
-logging.basicConfig(filename='server.log',
+"""logging.basicConfig(filename='server.log',
                     level=logging.DEBUG, datefmt='%d/%m/%y %H:%M:%S',
                     format='%(asctime)s - %(levelname)s - %(message)s')
-
+"""
 ######################################################################################################
 
 # create the two pipes if they do not exist already
@@ -35,95 +43,78 @@ def delete_pipes():
 
 # termination sequence function, delete pipes and send termination signal to C script
 def termination_sequence():
+    global written_bytes_caposc, written_bytes_capolet
+
+    # send zero termination sequence
+    zero = 0
+    zero_data = zero.to_bytes(4, byteorder='little')
+    os.write(caposc,  zero_data)
+    os.write(capolet, zero_data)
+     
     # delete pipes and kill archivio.c
     print("[SERVER.PY] deleting pipes")
     delete_pipes()
+
     print("[SERVER.PY] pipes deleted, sending termination signal")
     archivio_launcher.send_signal(signal.SIGTERM)
+
     print("[SERVER.PY] sent termination signal")
+    log_bytes_written(written_bytes_caposc, written_bytes_capolet)
+
     print("[SERVER.PY] Server shut down")
-    sys.exit()
+    sys.exit(0)
     
 # signal handler
 def sigint_handler(signum, frame):
-    print("*** SIGINT RECEIVED***")
+    print("[SERVER.PY] *** SIGINT RECEIVED***")
     termination_sequence()
     
-
-
 # logging to file
-def log_bytes_written(client_connection_type, caposc_bytes_written, capolet_bytes_written):
-
-    if (client_connection_type == "A"):
-        logging.info(f"Connessione: {client_connection_type}, bytes scritti in capolet: {capolet_bytes_written}")
-    else:
-        logging.info(f"Connessione: {client_connection_type}, bytes scritti in caposc: {caposc_bytes_written}")
-
-######################################################################################################
+def log_bytes_written(caposc_bytes_written, capolet_bytes_written):
+    logging.info(f"Connessione: A, bytes scritti in capolet: {capolet_bytes_written}")
+    logging.info(f"Connessione: B, bytes scritti in caposc: {caposc_bytes_written}")
 
 
-def client_connection(conn, capolet_fd, caposc_fd):
-    bytes_written_caposc = 0
-    bytes_written_capolet = 0
+def handle_client(conn, capolet_fd, caposc_fd):
+    global written_bytes_caposc, written_bytes_capolet
 
-    # receive messages
     with conn:
         while True:
-            # get client type letter
-            connection_code_type = conn.recv(1)
+            # Receive the first byte indicating the client connection
+            client_type = conn.recv(1).decode()
 
-            if (not connection_code_type):
-                print(connection_code_type)
-                print(f"[server.py] error rcv connection type closing...")
+            if not client_type:
                 break
-            
-            # decode client type
-            client_type = connection_code_type.decode()
-            # get msg length
-            str_len_bytes = conn.recv(4)
-            
-            # convert sequence length from bytes to int
-            str_len_number = struct.unpack('!I', str_len_bytes)[0]
-            
-            
-            # read sequence of length received before
-            message = conn.recv(str_len_number)
-            #print(f"[server.py] TYPE: {client_type}, LEN: {str_len_number}, MSG: {message}")
-            
-            # i received 0 so i have to write 0 in the pipe to terminate the sequence
-            if (str_len_number == 0):
-                print(f"[server.py] RECEIVED 0: {client_type} closing...")
-                if client_type == "A":
-                    os.write(capolet_fd, struct.pack('!I', 0))
-                else:
-                    os.write(caposc_fd, struct.pack('!I', 0))
-                conn.close()
-                break
+            seq_size = struct.unpack("!I", conn.recv(4))[0]
+
+            if seq_size > 0:
+                data = conn.recv(seq_size)
+                str_len = len(data).to_bytes(4, byteorder="little")
+                msg = str_len + data
                 
-            if (not message):
-                print("[server.py] Closing...")
-                conn.close()
+                # A = CAPOLET
+                if (client_type == "A"):
+                    # client1
+                    os.write(capolet_fd, msg)
+
+                    with written_bytes_capolet_lock:
+                        written_bytes_capolet += (4 + len(data))
+                elif (client_type == "B"):
+                    # client2
+                    os.write(caposc_fd, msg)
+
+                    with written_bytes_caposc_lock:
+                        written_bytes_caposc += (4 + len(data))
+
+                else:
+                    print(f"*********** [server.py] Received unknown client type {client_type}")
+                    
+            else:
                 break
-
-            if (client_type == "A"):
-                # write in capolet
-                # write 4 bytes to indicate string length
-                os.write(capolet_fd, struct.pack('!I', str_len_number))
-                # write the line
-                os.write(capolet_fd, message)
-                bytes_written_capolet += (4 + str_len_number)
-            elif (client_type == "B"):
-                # write in caposc
-                # write 4 bytes to indicate string length
-                os.write(caposc_fd, struct.pack('!I', str_len_number))
-                # write the line
-                os.write(caposc_fd, message)
-                bytes_written_caposc += (4 + str_len_number)
-
-        log_bytes_written(client_type, bytes_written_caposc, bytes_written_capolet)
 
 if __name__ == '__main__':
-
+    
+    print("server.py")
     parser = argparse.ArgumentParser()
     # max thread num to handle connections
     parser.add_argument('thread_num', help='Max threads num', nargs='?')
@@ -142,14 +133,16 @@ if __name__ == '__main__':
     else:
         c_launcher = ['./archivio', str(args.r), str(args.w)]
 
-    archivio_launcher = subprocess.Popen(c_launcher)
-    print(f"[SERVER.PY] Started: {archivio_launcher.pid}")
-
-    capolet = os.open("capolet", os.O_RDWR)
-    caposc = os.open("caposc", os.O_RDWR)
-
     if (args.thread_num is None):
         parser.error("The input value is required.")
+
+    # open pipes
+    capolet = os.open("capolet", os.O_RDWR)
+    caposc  = os.open("caposc", os.O_RDWR)
+
+    # start archivio
+    archivio_launcher = subprocess.Popen(c_launcher)
+    print(f"[SERVER.PY] Started: {archivio_launcher.pid}")
 
     signal.signal(signal.SIGINT, sigint_handler)
     
@@ -164,7 +157,7 @@ if __name__ == '__main__':
                 with ThreadPoolExecutor(max_workers=int(args.thread_num)) as executor:
                     while True:
                         conn, addr = server.accept()
-                        executor.submit(client_connection, conn, capolet, caposc)
+                        executor.submit(handle_client, conn, capolet, caposc)
 
             except KeyboardInterrupt:
                 print("------------- EXCEPTION ------------")
@@ -174,4 +167,3 @@ if __name__ == '__main__':
 
     except Exception as e:
         pass
-

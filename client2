@@ -7,29 +7,34 @@ HOST = '127.0.0.1'
 PORT = 54901
 
 def send_line(fname):
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         client_socket.connect((HOST, PORT))
 
         with open(fname, 'r') as file:
-
             for line in file:
-                # encode in bytes the line 
-                line = line.strip()
 
                 # pass empty lines
-                if not line:
-                    continue
-
                 if line.strip():
                     data = b'B' + len(line).to_bytes(4, byteorder='big') + line.encode()
                     client_socket.sendall(data)
 
         client_socket.sendall(b'B' + b'\x00\x00\x00\x00')
-    client_socket.shutdown(socket.SHUT_RDWR)
-    client_socket.close()
+        client_socket.shutdown(socket.SHUT_RDWR)
+        client_socket.close()
     
+def send_termination():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+        # connect to server
+        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        client_socket.connect((HOST, PORT))
+    
+        # check that the line is not an empty line
+        client_socket.sendall(b'B' + b'\x00\x00\x00\x00')
+    
+        # close socket
+        client_socket.shutdown(socket.SHUT_RDWR)
+        client_socket.close()
 
 if __name__ == '__main__':
 
@@ -43,7 +48,7 @@ if __name__ == '__main__':
     # create a thread for each input file
     with ThreadPoolExecutor() as executor:
         for filename in files:
-
             # send file lines from client B to server using a thread for each file
             executor.submit(send_line, filename)    
-            
+
+    send_termination()
