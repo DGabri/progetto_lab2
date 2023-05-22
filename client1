@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import socket
-import struct
-import sys
 import time
+import sys
 
 # connection constants
 HOST = '127.0.0.1'
@@ -13,49 +12,23 @@ def send_raw(line):
         # connect to server
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         client_socket.connect((HOST, PORT))
-        print("******* CONNECTED *******")
     
-        # check that the line is not an empty line
+        # send line via socket
         client_socket.sendall(line)
-        print("Sent: ", line)
+
         # close socket
         client_socket.shutdown(socket.SHUT_RDWR)
         client_socket.close()
-
-    print("CLOSED SOCKET")
 
 
 def send_line(line):
-    
-    data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
+    line_len = len(line)
+    data = b'A' + line_len.to_bytes(4, byteorder='big') + line.encode()
+    assert line_len <= 2100, "sequenza piu' lunga di 2100 char"
     send_raw(data)
 
-
-def send_all(fname):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-        # connect to server
-        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        client_socket.connect((HOST, PORT))
-        #print("******* CONNECTED *******")
-
-        with open(fname, 'r') as file:
-            for line in file:
-                if line.strip():
-                    #print(f"LINE: {line}")
-                    # send the read line
-                    data = b'A' + len(line).to_bytes(4, byteorder='big') + line.encode()
-                    client_socket.sendall(data)
-
-        client_socket.sendall(b'A' + b'\x00\x00\x00\x00')
-        #print("SENT TERMINATION SEQ")
-        # check that the line is not an empty line
-        #client_socket.sendall(line)
-        #print("Sent: ", line)
-        # close socket
-        client_socket.shutdown(socket.SHUT_RDWR)
-        client_socket.close()
-
-    print("CLOSED SOCKET")
+def send_termination():
+    send_raw(b'A' + b'\x00\x00\x00\x00')
 
 ################
 
@@ -66,14 +39,17 @@ if __name__ == '__main__':
 
     # get input file name
     input_file = sys.argv[1]
-    #send_all(input_file)
+
     with open(sys.argv[1], 'r') as file:
 
         for line in file:
             if line.strip():
-                print(f"LINE: {line}")
+                
                 # send the read line
                 send_line(line)
+
+    # send line length = 0 in bytes to indicate termination
+    send_termination()
 
     # Required when run with valgrind
     time.sleep(1)
