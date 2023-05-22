@@ -6,7 +6,6 @@ pthread_mutex_t log_file_mutex = PTHREAD_MUTEX_INITIALIZER;
 // capo scrittore function
 
 void *capo_scrittore(void *arg) {
-  // puts(".c => started caposcrittore");
   //  shared buffer between capo scrittore and scrittori
   Buffer *shared_buff = (Buffer *)arg;
   // open caposc pipe
@@ -17,8 +16,6 @@ void *capo_scrittore(void *arg) {
     exit(1);
   }
 
-  printf("***************** [CAPO SCRITTORE STARTED] *****************\n");
-  //  puts(".c => opened caposc");
   //   read from pipe and insert on shared buffer
 
   while (1) {
@@ -29,7 +26,7 @@ void *capo_scrittore(void *arg) {
 
     // error reading pipe
     if (e == 0) {
-      printf("[ERROR] CAPOSC PIPE%d\n", 10);
+      printf("[ERROR] reading pipe caposc\n");
       break;
     }
 
@@ -37,8 +34,8 @@ void *capo_scrittore(void *arg) {
     if (str_len == 0) {
       // termination string => read 0
       insert_element(shared_buff, NULL);
-      printf("[TERMINATION] CAPO SCRITTORE\n");
       break;
+
     } else {
       // Allocate memory for the string
       char *rcvd_string = malloc(str_len + 1);
@@ -62,8 +59,8 @@ void *capo_scrittore(void *arg) {
 
       // add \0 to the end of the string
       rcvd_string[str_len] = '\0';
-      printf("[CAPO SCRITTORE] LEN: %d, STR: %s\n", str_len, rcvd_string);
-      
+      // printf("[CAPO SCRITTORE] LEN: %d, STR: %s\n", str_len, rcvd_string);
+
       // Tokenization
       char *part;
       char *rimanente = NULL;
@@ -89,7 +86,7 @@ void *capo_scrittore(void *arg) {
   }
 
   close(pipe_fd);
-  printf("***************** [CAPO SCRITTORE] FINISHED *****************\n");
+
   return NULL;
 }
 
@@ -97,30 +94,21 @@ void *capo_scrittore(void *arg) {
 void *thread_scrittore(void *arg) {
   // shared buffer between capo scrittore and scrittori
   Buffer *shared_buff = (Buffer *)arg;
-  printf("***************** [SCRITTORE STARTED] *****************\n");
-  //  puts(".c => thread scrittore launched");
+
   //    read from buffer until NULL is read (termination string)
   while (1) {
     char *read_str = remove_element(shared_buff);
 
     // termination string
     if (read_str == NULL) {
-      puts("[********BREAK********] => break SCRITTORE");
       break;
     }
 
     // add to hashtable if read_str is not NULL
     aggiungi(read_str);
-    // printf("[SCRITTORE] read: [%s -> %d]\n", read_str, conta(read_str));
     free(read_str);
   }
-  /*
-  if (shared_buff->capo_has_finished) {
-    printf("[SCRITTORE] Terminating\n");
-  }
-  */
 
-  printf("***************** [SCRITTORE QUIT] *****************\n");
   return NULL;
 }
 
@@ -129,7 +117,6 @@ void *thread_scrittore(void *arg) {
 /*=================== CAPO LETTORE [client1] ===================*/
 // capo lettore function
 void *capo_lettore(void *arg) {
-  // puts(".c => started caposcrittore");
   //  shared buffer between capo scrittore and scrittori
   Buffer *shared_buff = (Buffer *)arg;
   // open caposc pipe
@@ -140,8 +127,6 @@ void *capo_lettore(void *arg) {
     exit(1);
   }
 
-  printf("***************** [CAPO LETTORE STARTED] *****************\n");
-  //  puts("[CAPO LETTORE] opened caposc");
   //    read from pipe and insert on shared buffer
   while (1) {
     int str_len;
@@ -150,7 +135,7 @@ void *capo_lettore(void *arg) {
     ssize_t e = read(pipe_fd, &str_len, sizeof(int));
     // error reading pipe
     if (e == 0) {
-      printf("[ERROR] %d\n", 1);
+      printf("[ERROR] reading pipe capolet\n");
       break;
     }
 
@@ -158,7 +143,6 @@ void *capo_lettore(void *arg) {
     if (str_len == 0) {
       // termination string => read 0
       insert_element(shared_buff, NULL);
-      printf("[TERMINATION] CAPO LETTORE\n");
       break;
     } else {
       // Allocate memory for the string
@@ -184,8 +168,8 @@ void *capo_lettore(void *arg) {
       // add \0 to the end of the string
       rcvd_string[str_len] = '\0';
 
-      printf("[CAPO LETTORE] LEN: %d, STR: %s\n", str_len, rcvd_string);
-      
+      // printf("[CAPO LETTORE] LEN: %d, STR: %s\n", str_len, rcvd_string);
+
       //   Tokenization
       char *part;
       char *rimanente = NULL;
@@ -210,7 +194,7 @@ void *capo_lettore(void *arg) {
   }
 
   close(pipe_fd);
-  printf("***************** [CAPO LETTORE QUIT] *****************\n");
+
   return NULL;
 }
 
@@ -221,15 +205,12 @@ void *thread_lettore(void *arg) {
   // shared buffer between capo lettore and lettori
   Buffer *shared_buff = (Buffer *)arg;
 
-  printf("***************** [LETTORE STARTED] *****************\n");
-
   //  read from buffer until NULL is read (termination string)
   while (1) {
     char *read_str = remove_element(shared_buff);
 
     // termination string
     if (read_str == NULL) {
-      // puts("[********BREAK********] => break lettore");
       break;
     }
 
@@ -253,12 +234,5 @@ void *thread_lettore(void *arg) {
     xpthread_mutex_unlock(&log_file_mutex, line, file);
   }
 
-  /*
-  if (shared_buff->capo_has_finished) {
-    printf("[LETTORE] Consumer %lu Terminating\n", pthread_self());
-  }
-  */
-
-  printf("***************** [LETTORE QUIT] *****************\n");
   return NULL;
 }
