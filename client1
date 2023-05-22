@@ -50,6 +50,6 @@ if __name__ == '__main__':
 
     # send line length = 0 in bytes to indicate termination
     send_termination()
-
+    #logging.info("CLIENT 1 FINISHED")
     # Required when run with valgrind
-    time.sleep(1)
+    #time.sleep(1)

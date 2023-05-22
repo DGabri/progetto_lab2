@@ -43,4 +43,4 @@ if __name__ == '__main__':
             executor.submit(send_line, filename)    
 
     # required to give time to the server to write everything to pipe
-    time.sleep(1)
+    #time.sleep(1)
