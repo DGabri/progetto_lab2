@@ -23,10 +23,10 @@ HOST = '127.0.0.1'
 PORT = 54901
 
 # setup basic logging
-"""logging.basicConfig(filename='server.log',
+logging.basicConfig(filename='server.log',
                     level=logging.DEBUG, datefmt='%d/%m/%y %H:%M:%S',
                     format='%(asctime)s - %(levelname)s - %(message)s')
-"""
+
 ######################################################################################################
 
 # create the two pipes if they do not exist already
@@ -52,21 +52,18 @@ def termination_sequence():
     os.write(capolet, zero_data)
      
     # delete pipes and kill archivio.c
-    print("[SERVER.PY] deleting pipes")
     delete_pipes()
 
-    print("[SERVER.PY] pipes deleted, sending termination signal")
+    # send sigterm to archivio.c
     archivio_launcher.send_signal(signal.SIGTERM)
 
-    print("[SERVER.PY] sent termination signal")
+    # log in server.log the number of bytes written in pipes
     log_bytes_written(written_bytes_caposc, written_bytes_capolet)
 
-    print("[SERVER.PY] Server shut down")
     sys.exit(0)
     
 # signal handler
 def sigint_handler(signum, frame):
-    print("[SERVER.PY] *** SIGINT RECEIVED***")
     termination_sequence()
     
 # logging to file
@@ -99,6 +96,7 @@ def handle_client(conn, capolet_fd, caposc_fd):
 
                     with written_bytes_capolet_lock:
                         written_bytes_capolet += (4 + len(data))
+
                 elif (client_type == "B"):
                     # client2
                     os.write(caposc_fd, msg)
@@ -114,7 +112,6 @@ def handle_client(conn, capolet_fd, caposc_fd):
 
 if __name__ == '__main__':
     
-    print("server.py")
     parser = argparse.ArgumentParser()
     # max thread num to handle connections
     parser.add_argument('thread_num', help='Max threads num', nargs='?')
@@ -142,7 +139,6 @@ if __name__ == '__main__':
 
     # start archivio
     archivio_launcher = subprocess.Popen(c_launcher)
-    print(f"[SERVER.PY] Started: {archivio_launcher.pid}")
 
     signal.signal(signal.SIGINT, sigint_handler)
     
@@ -160,7 +156,6 @@ if __name__ == '__main__':
                         executor.submit(handle_client, conn, capolet, caposc)
 
             except KeyboardInterrupt:
-                print("------------- EXCEPTION ------------")
                 pass
 
             server.shutdown(socket.SHUT_RDWR)
