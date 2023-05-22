@@ -26,9 +26,6 @@ int finished_threads = 0;
 // hashtable syncronization
 Htable_sync hashtable_global_sync;
 
-// extern FILE *log_file;
-
-
 /* ******************* */
 
 void free_memory() {
@@ -45,19 +42,19 @@ void free_memory() {
 /* ******************* */
 
 void manage_sigint(int signal_num) {
-  puts("[SIGNAL MANAGER] SIGINT received");
-  
+
   // get_unique_wors_count() uses reader locks in its implementation
   fprintf(stderr, "[SIGINT] Unique words in hashtable: %d\n",
           get_unique_words_count());
 }
 
 void manage_sigterm(int signal_num) {
-  puts("[SIGNAL MANAGER] SIGTERM received");
-  
   // wait threads termination
 
   /*=================== THREADS JOIN ===================*/
+  xpthread_join(capo_scrittore_thread, NULL, line, file);
+  xpthread_join(capo_lettore_thread, NULL, line, file);
+
   for (int i = 0; i < num_writers; i++) {
     xpthread_join(scrittori[i], NULL, line, file);
   }
@@ -65,9 +62,6 @@ void manage_sigterm(int signal_num) {
   for (int i = 0; i < num_readers; i++) {
     xpthread_join(lettori[i], NULL, line, file);
   }
-
-  xpthread_join(capo_scrittore_thread, NULL, line, file);
-  xpthread_join(capo_lettore_thread, NULL, line, file);
 
   // print unique words, deallocate hashtable
   fprintf(stderr, "Unique words in hashtable: %d\n", get_unique_words_count());
@@ -80,8 +74,7 @@ void manage_sigterm(int signal_num) {
 
 // Funzione del thread che gestisce i segnali
 void *signal_manager(void *arg) {
-  puts("[SIGNAL MANAGER STARTED]");
-  
+
   sigset_t mask;
 
   sigemptyset(&mask);        // remove all signals in the mask
@@ -118,11 +111,6 @@ int main(int argc, char **argv) {
   num_readers = atoi(argv[1]);
   num_writers = atoi(argv[2]);
 
-  // update total number of threads so that i can track the number of threads
-  // finished in sigterm function
-  NUM_THREADS += (num_readers + num_writers);
-  printf("[ARCHIVIO.c] Num Threads: %d\n", NUM_THREADS);
-
   /*=================== SIGNALS INIT ===================*/
   sigset_t mask; // create signal mask struct
 
@@ -139,8 +127,6 @@ int main(int argc, char **argv) {
 
   if (res == 0) {
     exit_msg("Error creating hashtable");
-  } else {
-    puts("[ARCHIVIO.c] HASTABLE CREATED SUCCESSFULY");
   }
 
   /*=================== SHARED BUFFERS ===================*/
@@ -165,15 +151,13 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  puts("[ARCHIVIO.c] created lettori scrittori buffer");
   //  intialize buffer struct
   init_buffer(lettori_buffer);
   init_buffer(scrittori_buffer);
-  puts("[ARCHIVIO.c] initialized buffers");
 
   /*=================== CLEANUP ===================*/
-  unlink("lettori.log");
-  
+  // unlink("lettori.log");
+
   /*=================== THREADS LAUNCHER ===================*/
   // threads definition
   pthread_t signal_manager_thread;
