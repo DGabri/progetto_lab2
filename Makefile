@@ -27,6 +27,7 @@ run_server: archivio
 	./server.py 5 -r 2 -w 4 -v & 
 	sleep 2
 	./client2 file1 file2
+	sleep 2
 	./client1 file3
 	pkill -INT -f server.py 
 
