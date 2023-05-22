@@ -9,7 +9,7 @@ import struct
 import socket
 import sys
 import os
-
+import time
 
 # syncronization for bytes written logging
 written_bytes_caposc_lock = threading.Lock()
@@ -52,11 +52,14 @@ def termination_sequence():
     os.write(capolet, zero_data)
      
     # delete pipes and kill archivio.c
-    delete_pipes()
+    #delete_pipes()
 
     # send sigterm to archivio.c
     archivio_launcher.send_signal(signal.SIGTERM)
+    while (archivio_launcher.poll() == None):
+        time.sleep(1)
 
+    delete_pipes()
     # log in server.log the number of bytes written in pipes
     log_bytes_written(written_bytes_caposc, written_bytes_capolet)
 
