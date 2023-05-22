@@ -1,8 +1,8 @@
 #!/usr/bin/env python3           
 from concurrent.futures import ThreadPoolExecutor
 import socket
-import sys
 import time
+import sys
 
 HOST = '127.0.0.1'
 PORT = 54901
@@ -17,25 +17,15 @@ def send_line(fname):
 
                 # pass empty lines
                 if line.strip():
-                    data = b'B' + len(line).to_bytes(4, byteorder='big') + line.encode()
+                    line_len = len(line)
+                    data = b'B' + line_len.to_bytes(4, byteorder='big') + line.encode()
+                    assert line_len <= 2100, "sequenza piu' lunga di 2100 char"
                     client_socket.sendall(data)
 
         client_socket.sendall(b'B' + b'\x00\x00\x00\x00')
         client_socket.shutdown(socket.SHUT_RDWR)
         client_socket.close()
     
-def send_termination():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-        # connect to server
-        client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        client_socket.connect((HOST, PORT))
-    
-        # check that the line is not an empty line
-        client_socket.sendall(b'B' + b'\x00\x00\x00\x00')
-    
-        # close socket
-        client_socket.shutdown(socket.SHUT_RDWR)
-        client_socket.close()
 
 if __name__ == '__main__':
 
@@ -52,7 +42,5 @@ if __name__ == '__main__':
             # send file lines from client B to server using a thread for each file
             executor.submit(send_line, filename)    
 
-    send_termination()
-
-    # Required when run with valgrind
+    # required to give time to the server to write everything to pipe
     time.sleep(1)
