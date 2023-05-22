@@ -44,8 +44,7 @@ void free_memory() {
 void manage_sigint(int signal_num) {
 
   // get_unique_wors_count() uses reader locks in its implementation
-  fprintf(stderr, "[SIGINT] Unique words in hashtable: %d\n",
-          get_unique_words_count());
+  fprintf(stderr, "Unique words in hashtable: %d\n", get_unique_words_count());
 }
 
 void manage_sigterm(int signal_num) {
