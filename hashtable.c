@@ -39,7 +39,7 @@ void free_hash_memory() {
   }
 
   hdestroy();
-  
+
   /* printf("Hash memory has been freed succesfully\n"); */
 }
 
@@ -161,7 +161,8 @@ void aggiungi(char *s) {
     // printf("[HASHTABLE INSERTED] => %s:%d\n", result->key,
     //        *((int *)result->data));
     hashtable_global_sync.unique_words_count++;
-    queue_allocated_memory(entry);
+
+    // queue_allocated_memory(entry);
   } else {
     // entry already exists, increment occurrence count
     int *counter = (int *)result->data;
@@ -206,27 +207,3 @@ int get_unique_words_count() {
 
   return count;
 }
-
-
-
-#ifdef UNIT_TEST
-Htable_sync hashtable_global_sync;
-
-int main(int argc, char *argv[]) {
-  int i;
-  
-  init_hashtable_sync_variables(&hashtable_global_sync);
-  hcreate(10000);
-
-  for (i = 0; i < 100; i++) {
-    aggiungi("ciao");
-    if(i% 2) aggiungi("bello");
-  }
-
-  if(conta("ciao") != 100) printf("ERROR\n");
-
-  hdestroy();
-  
-  return (0);
-}
-#endif

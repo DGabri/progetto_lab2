@@ -35,8 +35,6 @@ void free_memory() {
   free(lettori_buffer);
   free(scrittori);
   free(lettori);
-
-  free_hash_memory();
 }
 
 /* ******************* */
@@ -49,7 +47,6 @@ void manage_sigint(int signal_num) {
 
 void manage_sigterm(int signal_num) {
   // wait threads termination
-
   /*=================== THREADS JOIN ===================*/
   xpthread_join(capo_scrittore_thread, NULL, line, file);
   xpthread_join(capo_lettore_thread, NULL, line, file);
@@ -61,7 +58,6 @@ void manage_sigterm(int signal_num) {
   for (int i = 0; i < num_readers; i++) {
     xpthread_join(lettori[i], NULL, line, file);
   }
-
   // print unique words, deallocate hashtable
   fprintf(stderr, "Unique words in hashtable: %d\n", get_unique_words_count());
 
