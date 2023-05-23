@@ -74,6 +74,14 @@ def log_bytes_written(caposc_bytes_written, capolet_bytes_written):
     logging.info(f"Connessione: A, bytes scritti in capolet: {capolet_bytes_written}")
     logging.info(f"Connessione: B, bytes scritti in caposc: {caposc_bytes_written}")
 
+# function to correctly write data_len bytes to pipe, it writes the message until all bytes have been written
+def write_to_pipe(pipe_fd, data_len, data):
+    written_bytes = 0
+
+    while (written_bytes < data_len):
+        # write to pipe data until the message is all consumed
+        pipe_written_bytes = os.write(pipe_fd, data[written_bytes:])
+        written_bytes += pipe_written_bytes
 
 def handle_client(conn, capolet_fd, caposc_fd):
     global written_bytes_caposc, written_bytes_capolet
@@ -89,20 +97,21 @@ def handle_client(conn, capolet_fd, caposc_fd):
 
             if seq_size > 0:
                 data = conn.recv(seq_size)
-                str_len = len(data).to_bytes(4, byteorder="little")
+                data_len = len(data)
+                str_len = data_len.to_bytes(4, byteorder="little")
                 msg = str_len + data
-                
+
                 # A = CAPOLET
                 if (client_type == "A"):
-                    # client1
-                    os.write(capolet_fd, msg)
+                    # client1 -> capolet
+                    write_to_pipe(capolet_fd, data_len, msg)
 
                     with written_bytes_capolet_lock:
                         written_bytes_capolet += (4 + len(data))
 
                 elif (client_type == "B"):
-                    # client2
-                    os.write(caposc_fd, msg)
+                    # client2 -> caposc
+                    write_to_pipe(caposc_fd, data_len, msg)
 
                     with written_bytes_caposc_lock:
                         written_bytes_caposc += (4 + len(data))
