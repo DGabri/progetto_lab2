@@ -1,7 +1,7 @@
 # definizione del compilatore e dei flag di compilazione
 # che vengono usate dalle regole implicite
 CC=gcc
-CFLAGS=-std=c11 -Wall -g -pthread # -O
+CFLAGS=-std=c11 -Wall -g -pthread 
 LDLIBS=-lm -lrt -pthread
 
 
@@ -20,17 +20,15 @@ LDLIBS=-lm -lrt -pthread
 #INCS=hashtable.h  include.h  xerrori.h
 #OBJS=archivio.o  buffer.o  hashtable.o  xerrori.o
 
-all: run_server
+all: archivio
 
-run_server: archivio
-	/bin/rm -f valgrind-*
+auto_tester: archivio
 	./server.py 5 -r 2 -w 4 -v & 
 	sleep 2
 	./client2 file1 file2
-	sleep 2
+	sleep 1
 	./client1 file3
 	pkill -INT -f server.py 
-
 
 archivio: archivio.o buffer.o thread_functions.o hashtable.o xerrori.o
 	$(CC) $(CFLAGS) -o $@ $^
