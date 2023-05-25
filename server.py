@@ -51,6 +51,8 @@ def termination_sequence():
     os.write(caposc,  zero_data)
     os.write(capolet, zero_data)
      
+    os.close(caposc)
+    os.close(capolet)
     # delete pipes and kill archivio.c
     #delete_pipes()
 
