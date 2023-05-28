@@ -22,14 +22,6 @@ LDLIBS=-lm -lrt -pthread
 
 all: archivio
 
-auto_tester: archivio
-	./server.py 5 -r 2 -w 4 -v & 
-	sleep 2
-	./client2 file1 file2
-	sleep 1
-	./client1 file3
-	pkill -INT -f server.py 
-
 archivio: archivio.o buffer.o thread_functions.o hashtable.o xerrori.o
 	$(CC) $(CFLAGS) -o $@ $^
 
