@@ -1,4 +1,5 @@
 #include "include.h"
+#include <pthread.h>
 
 /* DEFINE USEFUL CONSTANTS */
 #define Num_elem 1000000
@@ -14,14 +15,6 @@ pthread_t *lettori;
 // create shared buffers
 Buffer *lettori_buffer;
 Buffer *scrittori_buffer;
-
-// signal thread info
-pthread_cond_t finished_threads_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t finished_threads_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-// threads counter for sigterm
-int NUM_THREADS = 2;
-int finished_threads = 0;
 
 // hashtable syncronization
 Htable_sync hashtable_global_sync;
@@ -63,8 +56,6 @@ void manage_sigterm(int signal_num) {
 
   /*=================== FREE MEMORY ===================*/
   free_memory();
-  
-  exit(0);
 }
 
 // Funzione del thread che gestisce i segnali
@@ -90,6 +81,7 @@ void *signal_manager(void *arg) {
       manage_sigint(sig_type);
     } else if (sig_type == SIGTERM) {
       manage_sigterm(sig_type);
+      pthread_exit(0);
     }
   }
 
